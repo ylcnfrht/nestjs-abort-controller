@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { AbortControllerOptions, AbortControllerRequest } from './types';
+import { ABORT_CONTROLLER, ABORT_SIGNAL } from './constants';
 
 const LOG_MESSAGES = {
   CLIENT_DISCONNECTED: 'Client disconnected, aborting request',
@@ -24,8 +25,8 @@ export class AbortControllerMiddleware implements NestMiddleware {
     const timeout = AbortControllerMiddleware.options.timeout ?? 30000;
     const enableLogging = AbortControllerMiddleware.options.enableLogging ?? false;
 
-    req.abortController = controller;
-    req.abortSignal = controller.signal;
+    req[ABORT_CONTROLLER] = controller;
+    req[ABORT_SIGNAL] = controller.signal;
 
     req.on('close', () => {
       if (enableLogging) {
