@@ -5,6 +5,15 @@ on:
     branches:
       - '**'
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or commit SHA to test'
+        required: false
+        default: main
+      repository:
+        description: 'Repository owner/name (leave default for this repo)'
+        required: false
+        default: ylcnfrht/nestjs-abort-controller
 
 permissions:
   contents: read
@@ -16,6 +25,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.repository || github.repository }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
