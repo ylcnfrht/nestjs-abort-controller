@@ -58,7 +58,6 @@
     "@nestjs/core": "^11.0.0"
   },
   "dependencies": {
-    "nestjs-abort-controller": "^1.1.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.0.0"
   },
