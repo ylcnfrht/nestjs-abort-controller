@@ -10,9 +10,10 @@ Graceful request cancellation support for NestJS using native `AbortController`.
 - 🚀 **Automatic AbortController Creation**: Creates `AbortSignal` for each incoming HTTP request
 - 🔄 **Client Disconnection Handling**: Automatically aborts long-running operations when client disconnects
 - 🎯 **Easy Integration**: Simple decorator-based approach with `@NestAbortSignal()`
-- ⚡ **Lightweight**: Zero additional dependencies (only Node >= 16)
+- ⚡ **Lightweight**: No runtime dependencies beyond NestJS itself
+- 🔌 **Express and Fastify**: Works with both HTTP adapters
 - 🔧 **TypeScript Support**: Full TypeScript support with proper type definitions
-- 🛡️ **Error Handling**: Built-in utilities for checking abort status
+- 🛡️ **Error Handling**: Built-in utilities for checking abort status, plus an optional filter that answers timeouts with `408 Request Timeout`
 - ⏰ **Configurable Timeout**: Set request timeout in **milliseconds** to automatically abort long-running operations
 - 📝 **Logging Support**: Optional logging for debugging abort scenarios
 
@@ -100,7 +101,9 @@ async function longRunningOperation(signal: AbortSignal) {
 
 #### `AbortError`
 
-Custom error class for abort operations.
+Custom error class for abort operations. The middleware aborts the signal with an `AbortError` as its
+`reason`, so `error.reason` tells you why the request was cancelled: `'timeout'` or `'client-disconnected'`.
+`fetch` and other APIs that take a signal reject with that same error.
 
 ```typescript
 import { AbortError } from 'nestjs-abort-controller';
@@ -109,9 +112,42 @@ try {
   // Some operation
 } catch (error) {
   if (error instanceof AbortError) {
-    console.log('Operation was aborted');
+    console.log('Operation was aborted:', error.reason);
   }
 }
+```
+
+### Error responses
+
+By default an `AbortError` thrown from a handler goes through Nest's normal error handling (`500`, or your own
+exception filters). Register the optional `AbortExceptionFilter` to get proper status codes instead:
+
+```typescript
+import { APP_FILTER } from '@nestjs/core';
+import { AbortControllerModule, AbortExceptionFilter } from 'nestjs-abort-controller';
+
+@Module({
+  imports: [AbortControllerModule.forRoot()],
+  providers: [{ provide: APP_FILTER, useClass: AbortExceptionFilter }],
+})
+export class AppModule {}
+```
+
+| Cause | Response |
+| --- | --- |
+| `timeout` (or a manual abort) | `408 Request Timeout` |
+| `client-disconnected` | nothing is sent (the client is gone), nothing is logged as an error |
+
+### Accessing the signal outside controllers
+
+The middleware stores the controller and signal on the Node request under symbol keys, so they never clash
+with other libraries. Use them in guards, interceptors or custom middleware:
+
+```typescript
+import { ABORT_SIGNAL } from 'nestjs-abort-controller';
+
+const req = context.switchToHttp().getRequest();
+const signal: AbortSignal = req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL]; // req.raw on Fastify
 ```
 
 ### `AbortControllerModule`
@@ -160,7 +196,7 @@ export class AppModule {}
 
 ```typescript
 interface AbortControllerOptions {
-  timeout?: number; // Timeout duration in milliseconds (default: 30000ms = 30 seconds)
+  timeout?: number; // Timeout duration in milliseconds (default: 30000ms = 30 seconds, 0 disables it)
   enableLogging?: boolean; // Enable debug logging (default: false)
 }
 ```
@@ -349,8 +385,19 @@ describe('AbortController', () => {
 
 ## 📋 Requirements
 
-- Node.js >= 16.0.0
-- NestJS >= 8.0.0
+- Node.js >= 16.0.0 (NestJS 11 itself requires Node.js >= 20)
+- NestJS >= 11.0.0 (Express or Fastify adapter)
+
+## ⚠️ Deprecations (1.3)
+
+No code changes are needed to upgrade to 1.3. These still work but will be removed in 2.0:
+
+- `req.abortSignal` / `req.abortController`: use `@NestAbortSignal()` or `req[ABORT_SIGNAL]` /
+  `req[ABORT_CONTROLLER]` (see above).
+- `AbortControllerMiddleware.setOptions()`: options now come from `forRoot()` / `forRoutes()` via DI;
+  to use the middleware manually, pass them to the constructor: `new AbortControllerMiddleware({ timeout: 5000 })`.
+
+Fixed in 1.3: requests with a body (POST/PUT) no longer abort the signal as soon as the body is read.
 
 ## 🤝 Contributing
 

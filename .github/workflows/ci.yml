@@ -21,6 +21,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
 
     steps:
       - name: Checkout repository
@@ -32,11 +35,17 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - name: Install dependencies (force)
-        run: npm install --force
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Run unit tests
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
         run: npm test

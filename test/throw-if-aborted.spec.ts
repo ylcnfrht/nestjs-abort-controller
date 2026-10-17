@@ -1,7 +1,4 @@
-import { 
-  throwIfAborted, 
-  AbortError
-} from '../src/throw-if-aborted';
+import { throwIfAborted, AbortError } from '../src/throw-if-aborted';
 
 describe('AbortError', () => {
   it('should create AbortError with default message', () => {
@@ -33,5 +30,24 @@ describe('throwIfAborted', () => {
     const controller = new AbortController();
     controller.abort();
     expect(() => throwIfAborted(controller.signal, 'Custom message')).toThrow('Custom message');
+  });
+
+  it('should rethrow the AbortError used as the abort reason', () => {
+    const controller = new AbortController();
+    const reason = new AbortError('Request timed out', 'timeout');
+    controller.abort(reason);
+    expect(() => throwIfAborted(controller.signal)).toThrow(reason);
+  });
+
+  it('should keep the reason when a custom message is given', () => {
+    const controller = new AbortController();
+    controller.abort(new AbortError('x', 'client-disconnected'));
+    try {
+      throwIfAborted(controller.signal, 'Custom message');
+    } catch (e) {
+      expect((e as AbortError).message).toBe('Custom message');
+      expect((e as AbortError).reason).toBe('client-disconnected');
+    }
+    expect.assertions(2);
   });
 });
