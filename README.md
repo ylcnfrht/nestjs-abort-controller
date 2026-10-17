@@ -181,7 +181,7 @@ import { AbortControllerModule } from 'nestjs-abort-controller';
 
 @Module({
   imports: [
-    AbortControllerModule.forRoutes(['/api/*'], {
+    AbortControllerModule.forRoutes(['/api/*path'], { // NestJS 11 wildcard syntax ('/api/*' still works with a warning)
       timeout: 60000, // 60000ms = 60 seconds
       enableLogging: false,
     }),
@@ -388,16 +388,29 @@ describe('AbortController', () => {
 - Node.js >= 16.0.0 (NestJS 11 itself requires Node.js >= 20)
 - NestJS >= 11.0.0 (Express or Fastify adapter)
 
-## ⚠️ Deprecations (1.3)
+## ⬆️ Upgrading to 1.3
 
-No code changes are needed to upgrade to 1.3. These still work but will be removed in 2.0:
+No code changes are needed to upgrade from 1.2 to 1.3.
+
+**Fixed**
+
+- Requests with a body (POST/PUT/PATCH) no longer abort the signal as soon as the body is read; the signal is now
+  aborted only when the client really disconnects or the timeout is hit.
+- Options passed to `forRoot()` / `forRoutes()` no longer leak between calls.
+
+**New**
+
+- Fastify adapter support.
+- `AbortError.reason` (`'timeout'` | `'client-disconnected'`) and the signal's `reason` tell you why a request was cancelled.
+- Optional `AbortExceptionFilter` (see [Error responses](#error-responses)).
+- `ABORT_SIGNAL` / `ABORT_CONTROLLER` symbol keys for reading the signal outside controllers.
+
+**Deprecated** (still work, will be removed in 2.0)
 
 - `req.abortSignal` / `req.abortController`: use `@NestAbortSignal()` or `req[ABORT_SIGNAL]` /
   `req[ABORT_CONTROLLER]` (see above).
 - `AbortControllerMiddleware.setOptions()`: options now come from `forRoot()` / `forRoutes()` via DI;
   to use the middleware manually, pass them to the constructor: `new AbortControllerMiddleware({ timeout: 5000 })`.
-
-Fixed in 1.3: requests with a body (POST/PUT) no longer abort the signal as soon as the body is read.
 
 ## 🤝 Contributing
 
