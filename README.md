@@ -420,6 +420,13 @@ No code changes are needed to upgrade from 1.2 to 1.3.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## 👤 Author
+
+**ylcnfrht**
+
+- GitHub: [@ylcnfrht](https://github.com/ylcnfrht)
+- ☕ [Buy me a coffee](https://buymeacoffee.com/ylcnfrht) - If you find this project helpful, consider supporting it!
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
