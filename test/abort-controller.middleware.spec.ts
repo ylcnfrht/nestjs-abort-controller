@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import { AbortControllerMiddleware } from '../src/abort-controller.middleware';
 import { AbortControllerRequest } from '../src/types';
 
@@ -27,8 +28,27 @@ describe('AbortControllerMiddleware', () => {
     const fakeNext = jest.fn();
     middleware.use(fakeReq, fakeRes, fakeNext);
     // Check that the close event handler was registered
-    expect(fakeReq.on).toHaveBeenCalledWith('close', expect.any(Function));
+    expect(fakeRes.on).toHaveBeenCalledWith('close', expect.any(Function));
     expect(fakeNext).toHaveBeenCalled();
+  });
+
+  it('should abort when response closes before finishing (client disconnect)', () => {
+    const fakeReq: any = new EventEmitter();
+    const fakeRes: any = new EventEmitter();
+    middleware.use(fakeReq, fakeRes, jest.fn());
+    fakeReq.emit('close'); // fires once the body is read, must not abort
+    expect(fakeReq.abortSignal.aborted).toBe(false);
+    fakeRes.emit('close');
+    expect(fakeReq.abortSignal.aborted).toBe(true);
+  });
+
+  it('should not abort when response finished normally', () => {
+    const fakeReq: any = new EventEmitter();
+    const fakeRes: any = new EventEmitter();
+    middleware.use(fakeReq, fakeRes, jest.fn());
+    fakeRes.emit('finish');
+    fakeRes.emit('close');
+    expect(fakeReq.abortSignal.aborted).toBe(false);
   });
 
   it('should abort on timeout', (done) => {

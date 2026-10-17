@@ -27,11 +27,24 @@ export class AbortControllerMiddleware implements NestMiddleware {
     req.abortController = controller;
     req.abortSignal = controller.signal;
 
-    req.on('close', () => {
+    let requestFinished = false;
+
+    res.on('close', () => {
+      if (requestFinished) {
+        return;
+      }
+      
       if (enableLogging) {
         this.logger.debug(LOG_MESSAGES.CLIENT_DISCONNECTED);
       }
       controller.abort();
+    });
+
+    res.on('finish', () => {
+      requestFinished = true;
+      if (enableLogging) {
+        this.logger.debug(LOG_MESSAGES.REQUEST_COMPLETED);
+      }
     });
 
     if (timeout > 0) {
@@ -42,15 +55,9 @@ export class AbortControllerMiddleware implements NestMiddleware {
         controller.abort();
       }, timeout);
 
-      req.on('close', () => clearTimeout(timeoutId));
+      res.on('close', () => clearTimeout(timeoutId));
       res.on('finish', () => clearTimeout(timeoutId));
     }
-
-    res.on('finish', () => {
-      if (enableLogging) {
-        this.logger.debug(LOG_MESSAGES.REQUEST_COMPLETED);
-      }
-    });
 
     next();
   }
