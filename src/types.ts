@@ -1,8 +1,9 @@
 import { Request } from 'express';
+import { ABORT_CONTROLLER, ABORT_SIGNAL } from './constants';
 
 export interface AbortControllerRequest extends Request {
-  abortController?: AbortController;
-  abortSignal?: AbortSignal;
+  [ABORT_CONTROLLER]?: AbortController;
+  [ABORT_SIGNAL]?: AbortSignal;
 }
 
 export interface AbortControllerOptions {

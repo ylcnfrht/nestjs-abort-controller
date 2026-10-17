@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { AbortControllerMiddleware } from '../src/abort-controller.middleware';
 import { AbortControllerRequest } from '../src/types';
+import { ABORT_CONTROLLER, ABORT_SIGNAL } from '../src/constants';
 
 describe('AbortControllerMiddleware', () => {
   let middleware: AbortControllerMiddleware;
@@ -17,8 +18,8 @@ describe('AbortControllerMiddleware', () => {
 
   it('should attach abortController and abortSignal to request', () => {
     middleware.use(req as any, res, next);
-    expect(req.abortController).toBeDefined();
-    expect(req.abortSignal).toBeDefined();
+    expect(req[ABORT_CONTROLLER]).toBeDefined();
+    expect(req[ABORT_SIGNAL]).toBeDefined();
     expect(next).toHaveBeenCalled();
   });
 
@@ -37,9 +38,9 @@ describe('AbortControllerMiddleware', () => {
     const fakeRes: any = new EventEmitter();
     middleware.use(fakeReq, fakeRes, jest.fn());
     fakeReq.emit('close'); // fires once the body is read, must not abort
-    expect(fakeReq.abortSignal.aborted).toBe(false);
+    expect(fakeReq[ABORT_SIGNAL].aborted).toBe(false);
     fakeRes.emit('close');
-    expect(fakeReq.abortSignal.aborted).toBe(true);
+    expect(fakeReq[ABORT_SIGNAL].aborted).toBe(true);
   });
 
   it('should not abort when response finished normally', () => {
@@ -48,7 +49,7 @@ describe('AbortControllerMiddleware', () => {
     middleware.use(fakeReq, fakeRes, jest.fn());
     fakeRes.emit('finish');
     fakeRes.emit('close');
-    expect(fakeReq.abortSignal.aborted).toBe(false);
+    expect(fakeReq[ABORT_SIGNAL].aborted).toBe(false);
   });
 
   it('should abort on timeout', (done) => {
@@ -58,7 +59,7 @@ describe('AbortControllerMiddleware', () => {
     const fakeNext = jest.fn();
     middleware.use(fakeReq, fakeRes, fakeNext);
     setTimeout(() => {
-      expect(fakeReq.abortController.signal.aborted).toBe(true);
+      expect(fakeReq[ABORT_CONTROLLER].signal.aborted).toBe(true);
       done();
     }, 20);
   });
