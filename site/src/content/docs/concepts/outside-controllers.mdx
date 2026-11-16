@@ -1,0 +1,63 @@
+---
+title: Guards, interceptors and middleware
+description: Read the request's signal and controller outside handlers through the ABORT_SIGNAL and ABORT_CONTROLLER symbols.
+sidebar:
+  order: 7
+---
+
+The middleware stores two values on the Node request:
+
+| Key | Value |
+| --- | --- |
+| `ABORT_SIGNAL` | the request's `AbortSignal` |
+| `ABORT_CONTROLLER` | its `AbortController`, if you want to abort yourself |
+
+Both are `Symbol.for(...)` keys, so they never clash with other libraries and still match when two copies of the
+package end up in `node_modules`.
+
+```ts
+import { ABORT_SIGNAL } from 'nestjs-abort-controller';
+
+const req = context.switchToHttp().getRequest();
+const signal: AbortSignal | undefined = req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL]; // req.raw on Fastify
+```
+
+On Fastify, Nest middleware sees the raw Node request, while guards and interceptors get Fastify's request wrapper.
+The value lives on the raw one, hence `req.raw`. `@NestAbortSignal()` does this lookup for you.
+
+## Example: abort from a guard
+
+```ts
+import { ABORT_CONTROLLER, AbortError } from 'nestjs-abort-controller';
+
+@Injectable()
+export class MaintenanceGuard implements CanActivate {
+  canActivate(context: ExecutionContext) {
+    const req = context.switchToHttp().getRequest();
+    const controller: AbortController | undefined = req[ABORT_CONTROLLER] ?? req.raw?.[ABORT_CONTROLLER];
+    if (this.maintenance.draining) controller?.abort(new AbortError('Draining'));
+    return true;
+  }
+}
+```
+
+## Example: log abandoned requests
+
+```ts
+@Injectable()
+export class AbandonedRequestInterceptor implements NestInterceptor {
+  private readonly logger = new Logger('Abandoned');
+
+  intercept(context: ExecutionContext, next: CallHandler) {
+    const req = context.switchToHttp().getRequest();
+    const signal: AbortSignal | undefined = req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL];
+    signal?.addEventListener('abort', () => this.logger.warn(`${req.method} ${req.url}: ${signal.reason?.reason}`), { once: true });
+    return next.handle();
+  }
+}
+```
+
+## Deprecated properties
+
+`req.abortSignal` and `req.abortController` are still set for 1.2 code. They will be removed in 2.0; use the symbols
+or the decorator.

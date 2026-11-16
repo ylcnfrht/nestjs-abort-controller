@@ -1,0 +1,29 @@
+---
+title: Fastify
+description: Using nestjs-abort-controller with @nestjs/platform-fastify.
+sidebar:
+  order: 2
+---
+
+Fastify works out of the box since 1.3. The module, decorator and filter are the same:
+
+```ts
+import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+
+const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+await app.listen(3000);
+```
+
+The one difference: Nest middleware on Fastify receives the raw Node request, while guards, interceptors and
+`getRequest()` give you Fastify's wrapper. The signal lives on the raw request, so outside `@NestAbortSignal()` read it as:
+
+```ts
+const req = context.switchToHttp().getRequest();
+const signal: AbortSignal | undefined = req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL];
+```
+
+Writing it with the `??` fallback keeps the same code working on Express.
+
+The end-to-end test suite runs every scenario (POST with a body, client disconnect, timeout with the filter) on both
+adapters.

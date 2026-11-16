@@ -1,0 +1,71 @@
+---
+title: Testing
+description: Unit-test services with your own AbortController and end-to-end-test disconnects and timeouts.
+sidebar:
+  order: 3
+---
+
+## Unit tests: pass your own signal
+
+Services take an `AbortSignal` parameter, so tests create one. No module needed.
+
+```ts
+it('stops when aborted', async () => {
+  const controller = new AbortController();
+  controller.abort(new AbortError('test', 'client-disconnected'));
+
+  await expect(service.list(controller.signal)).rejects.toBeInstanceOf(AbortError);
+});
+
+it('runs to the end otherwise', async () => {
+  await expect(service.list(new AbortController().signal)).resolves.toHaveLength(3);
+});
+```
+
+## Handler tests: call the method
+
+In a controller unit test, the decorator is not involved. Pass the signal as the argument it would receive.
+
+```ts
+await controller.list(new AbortController().signal);
+```
+
+## End-to-end: a real server
+
+The middleware listens to the real response, so e2e tests need a listening server. A short timeout keeps the test fast.
+
+```ts
+@Module({
+  imports: [AbortControllerModule.forRoot({ timeout: 200 })],
+  controllers: [SlowController],
+  providers: [{ provide: APP_FILTER, useClass: AbortExceptionFilter }],
+})
+class TestModule {}
+
+let app: INestApplication;
+let port: number;
+
+beforeAll(async () => {
+  app = await NestFactory.create(TestModule, { logger: false });
+  await app.listen(0, '127.0.0.1');
+  port = app.getHttpServer().address().port;
+});
+afterAll(() => app.close());
+
+it('answers 408 after the timeout', async () => {
+  const res = await fetch(`http://127.0.0.1:${port}/slow`);
+  expect(res.status).toBe(408);
+});
+
+it('aborts when the client disconnects', async () => {
+  const req = http.request({ port, path: '/slow' });
+  req.on('error', () => undefined);
+  req.end();
+  setTimeout(() => req.destroy(), 50);
+  // assert on what the handler saw, e.g. a flag it sets after its await
+});
+```
+
+Testing a disconnect needs a raw `http.request` you can `destroy()`; `supertest` waits for a response.
+The library's own [e2e suite](https://github.com/ylcnfrht/nestjs-abort-controller/blob/main/test/e2e.spec.ts) does
+exactly this on Express and Fastify.

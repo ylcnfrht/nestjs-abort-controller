@@ -1,0 +1,402 @@
+/*
+ * nestjs-abort-controller design system (sibling of enhanced-abort-controller, @ylcnfrht/ioc and resilience).
+ * Calm, near-black "control room": hairline borders, one restrained accent (Nest rose), Geist type.
+ * Outcome colours (timeout / abort / callback) appear only in illustrations and live widgets, never as decoration.
+ */
+
+/* ---------- Tokens ---------- */
+:root {
+  --io-bg: #08090b;
+  --io-surface: #0d0f12;
+  --io-surface-2: #14171b;
+  --io-surface-3: #1b1f25;
+  --io-hairline: rgb(255 255 255 / 0.075);
+  --io-hairline-strong: rgb(255 255 255 / 0.14);
+  --io-code-bg: #0b0d10;
+  --io-text: #e8eaee;
+  --io-text-muted: #9aa1ad;
+  --io-text-faint: #8b93a0;
+
+  --io-accent: #f43f5e; /* rose, NestJS-adjacent */
+  --io-accent-2: #fda4af; /* soft rose, secondary highlights */
+  /* Outcomes: used consistently by every widget and illustration. */
+  --io-timeout: #fbbf24; /* TimeoutError: a deadline fired */
+  --io-cancel: #fb7185; /* AbortError / your reason: abort() was called */
+  --io-callback: #7dd3fc; /* register() callbacks, links */
+  --io-green: #34d399;
+  --io-amber: #fbbf24;
+  --io-red: #fb7185;
+
+  --io-radius: 14px;
+  --io-radius-sm: 9px;
+  --io-mono: 'Geist Mono Variable', ui-monospace, monospace;
+
+  --sl-font: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --sl-font-mono: var(--io-mono);
+  --sl-text-h1: clamp(2.1rem, 1.6rem + 1.8vw, 2.9rem);
+  --sl-text-h2: 1.6rem;
+  --sl-text-h3: 1.2rem;
+  --sl-line-height: 1.7;
+  --sl-nav-height: 3.75rem;
+  --sl-content-width: 46rem;
+  --sl-sidebar-width: 17rem;
+
+  /* Starlight dark palette */
+  --sl-color-accent-low: color-mix(in oklab, var(--io-accent) 16%, var(--io-bg));
+  --sl-color-accent: var(--io-accent);
+  --sl-color-accent-high: color-mix(in oklab, var(--io-accent) 55%, white);
+  --sl-color-white: #f5f6f8;
+  --sl-color-gray-1: #e4e7ec;
+  --sl-color-gray-2: #c4c9d2;
+  --sl-color-gray-3: var(--io-text-muted);
+  --sl-color-gray-4: var(--io-text-faint);
+  --sl-color-gray-5: #2a2f37;
+  --sl-color-gray-6: var(--io-surface-2);
+  --sl-color-black: var(--io-bg);
+  --sl-color-bg: var(--io-bg);
+  --sl-color-bg-nav: rgb(8 9 11 / 0.72);
+  --sl-color-bg-sidebar: var(--io-bg);
+  --sl-color-bg-inline-code: var(--io-surface-2);
+  --sl-color-hairline: var(--io-hairline);
+  --sl-color-hairline-light: var(--io-hairline);
+  --sl-color-hairline-shade: var(--io-hairline-strong);
+  --sl-color-text: var(--io-text);
+  --sl-color-text-accent: var(--io-accent);
+}
+
+:root[data-theme='light'] {
+  --io-bg: #ffffff;
+  --io-surface: #f7f8fa;
+  --io-surface-2: #f0f2f5;
+  --io-surface-3: #e7eaee;
+  --io-hairline: rgb(15 20 30 / 0.09);
+  --io-hairline-strong: rgb(15 20 30 / 0.16);
+  --io-code-bg: #f8f9fb;
+  --io-text: #111418;
+  --io-text-muted: #545b66;
+  --io-text-faint: #646b76;
+  --io-accent: #be123c;
+  --io-accent-2: #9f1239;
+  --io-timeout: #b45309;
+  --io-cancel: #be123c;
+  --io-callback: #0369a1;
+
+  --sl-color-accent-low: #fef3c7;
+  --sl-color-accent: #b45309;
+  --sl-color-accent-high: #78350f;
+  --sl-color-white: #0b0d10;
+  --sl-color-gray-1: #1a1e24;
+  --sl-color-gray-2: #333a44;
+  --sl-color-gray-3: var(--io-text-muted);
+  --sl-color-gray-4: var(--io-text-faint);
+  --sl-color-gray-5: #d9dde3;
+  --sl-color-gray-6: var(--io-surface-2);
+  --sl-color-gray-7: var(--io-surface);
+  --sl-color-black: #ffffff;
+  --sl-color-bg-nav: rgb(255 255 255 / 0.78);
+  --sl-color-bg-sidebar: #ffffff;
+}
+
+/* ---------- Base ---------- */
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+::selection {
+  background: color-mix(in oklab, var(--io-accent) 30%, transparent);
+}
+
+/* ---------- Header ---------- */
+header.header,
+mobile-starlight-toc nav {
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  border-bottom: 1px solid var(--io-hairline);
+}
+.site-title {
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--sl-color-white);
+}
+.site-title img {
+  height: 1.6rem;
+}
+site-search button[data-open-modal] {
+  border: 1px solid var(--io-hairline);
+  background: var(--io-surface);
+  border-radius: 10px;
+  height: 2.35rem;
+  color: var(--io-text-faint);
+  transition: border-color 0.15s, background 0.15s;
+}
+/* Full-width search only from tablet up; on phones Starlight shows it icon-only. */
+@media (min-width: 50rem) {
+  site-search button[data-open-modal] {
+    min-width: 18rem;
+  }
+}
+site-search button[data-open-modal]:hover {
+  border-color: var(--io-hairline-strong);
+  background: var(--io-surface-2);
+  color: var(--io-text-muted);
+}
+site-search button[data-open-modal] kbd {
+  background: var(--io-surface-2);
+  border: 1px solid var(--io-hairline);
+  border-radius: 6px;
+  font-family: var(--io-mono);
+  font-size: 0.7rem;
+}
+starlight-theme-select select,
+starlight-theme-select label {
+  color: var(--io-text-muted);
+  font-size: 0.8rem;
+}
+/* Theme picker: icon only, the label adds noise next to the search. */
+starlight-theme-select select {
+  width: 1.4rem;
+  padding: 0;
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+starlight-theme-select label {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  justify-content: center;
+}
+starlight-theme-select label > svg:last-of-type {
+  display: none;
+}
+
+/* ---------- Sidebar ---------- */
+nav.sidebar .sidebar-pane {
+  border-inline-end: 1px solid var(--io-hairline);
+}
+.sidebar-content {
+  padding-top: 1.25rem;
+}
+.sidebar-content .group-label .large {
+  font-family: var(--io-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--io-text-faint);
+}
+.sidebar-content summary {
+  padding-block: 0.4rem;
+}
+.sidebar-content ul ul {
+  border-inline-start: 1px solid var(--io-hairline) !important;
+  margin-inline-start: 0.5rem;
+}
+.sidebar-content a {
+  font-size: 0.875rem;
+  color: var(--io-text-muted);
+  border-radius: 8px;
+  padding: 0.32rem 0.7rem;
+  transition: color 0.15s, background 0.15s;
+}
+.sidebar-content a:hover {
+  color: var(--sl-color-white);
+}
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  color: var(--sl-color-white);
+  background: var(--io-surface-2);
+  font-weight: 500;
+}
+
+/* ---------- Table of contents ---------- */
+starlight-toc h2,
+mobile-starlight-toc .toggle {
+  font-family: var(--io-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--io-text-faint);
+}
+starlight-toc a {
+  font-size: 0.82rem;
+  color: var(--io-text-faint);
+}
+starlight-toc a[aria-current='true'],
+starlight-toc a[aria-current='true']:hover {
+  color: var(--sl-color-white);
+}
+.right-sidebar {
+  border-inline-start: 1px solid var(--io-hairline);
+}
+
+/* ---------- Content ---------- */
+.content-panel {
+  border-top: none;
+}
+.content-panel + .content-panel {
+  border-top: none;
+}
+h1#_top {
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+.sl-markdown-content :is(h2, h3, h4) {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.sl-markdown-content h2 {
+  margin-top: 3rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--io-hairline);
+}
+.sl-markdown-content > :first-child + h2,
+.sl-markdown-content .sl-heading-wrapper.level-h2:first-child h2 {
+  border-top: none;
+  padding-top: 0;
+}
+.sl-markdown-content p,
+.sl-markdown-content li {
+  color: color-mix(in oklab, var(--io-text) 88%, var(--io-text-muted));
+}
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--sl-color-white);
+  text-decoration-color: color-mix(in oklab, var(--io-accent) 60%, transparent);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: var(--io-accent);
+}
+.sl-markdown-content :not(pre) > code {
+  font-family: var(--io-mono);
+  font-size: 0.84em;
+  background: var(--io-surface-2);
+  border: 1px solid var(--io-hairline);
+  border-radius: 6px;
+  padding: 0.12em 0.4em;
+  color: var(--sl-color-white);
+}
+
+/* Tables: framed, mono headers (reads like a spec sheet). */
+.sl-markdown-content table {
+  /* Block + overflow so wide tables scroll inside the column instead of running under the TOC. */
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--io-hairline);
+  border-radius: var(--io-radius-sm);
+  font-size: 0.875rem;
+}
+.sl-markdown-content :is(th, td) {
+  border: none;
+  border-bottom: 1px solid var(--io-hairline);
+  padding: 0.7rem 0.9rem;
+  vertical-align: top;
+}
+.sl-markdown-content tr:last-child td {
+  border-bottom: none;
+}
+.sl-markdown-content th {
+  background: var(--io-surface);
+  font-family: var(--io-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--io-text-faint);
+  text-align: start;
+}
+
+/* Asides: quiet, left rule only. */
+.starlight-aside {
+  border: 1px solid var(--io-hairline);
+  border-inline-start: 2px solid var(--sl-color-asides-border);
+  border-radius: var(--io-radius-sm);
+  background: var(--io-surface);
+}
+.starlight-aside__title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* Cards / link cards / tabs from Starlight components. */
+.card,
+.sl-link-card {
+  border: 1px solid var(--io-hairline) !important;
+  border-radius: var(--io-radius) !important;
+  background: var(--io-surface) !important;
+  box-shadow: none !important;
+}
+.sl-link-card:hover {
+  border-color: var(--io-hairline-strong) !important;
+  background: var(--io-surface-2) !important;
+}
+starlight-tabs [role='tablist'] {
+  border-bottom: 1px solid var(--io-hairline);
+}
+starlight-tabs [role='tab'] {
+  font-size: 0.85rem;
+  color: var(--io-text-faint);
+}
+starlight-tabs [role='tab'][aria-selected='true'] {
+  color: var(--sl-color-white);
+  border-color: var(--io-accent);
+}
+
+/* Pagination footer */
+.pagination-links a {
+  border: 1px solid var(--io-hairline);
+  border-radius: var(--io-radius);
+  background: var(--io-surface);
+  box-shadow: none;
+}
+.pagination-links a:hover {
+  border-color: var(--io-hairline-strong);
+}
+
+/* ---------- Shared primitives (landing + MDX) ---------- */
+.io-eyebrow {
+  font-family: var(--io-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--io-accent);
+}
+.io-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--io-mono);
+  font-size: 0.72rem;
+  border: 1px solid var(--io-hairline-strong);
+  color: var(--io-text-muted);
+}
+.io-pill[data-tone='green'] { color: var(--io-green); border-color: color-mix(in srgb, var(--io-green) 35%, transparent); }
+.io-pill[data-tone='amber'] { color: var(--io-amber); border-color: color-mix(in srgb, var(--io-amber) 35%, transparent); }
+.io-pill[data-tone='red'] { color: var(--io-red); border-color: color-mix(in srgb, var(--io-red) 35%, transparent); }
+.io-card {
+  border: 1px solid var(--io-hairline);
+  border-radius: var(--io-radius);
+  padding: 1.2rem 1.35rem;
+  background: var(--io-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

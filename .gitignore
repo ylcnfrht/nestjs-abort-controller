@@ -40,3 +40,6 @@ temp/
 
 # Test
 .jest/ 
+# docs site
+.astro/
+site/src/content/docs/api/

@@ -1,0 +1,50 @@
+---
+title: How it works
+description: The request lifecycle inside AbortControllerMiddleware, step by step.
+sidebar:
+  order: 1
+---
+
+`AbortControllerModule` registers one middleware, `AbortControllerMiddleware`. For every matching request it:
+
+1. creates a new native `AbortController`;
+2. stores it on the Node request under the symbol keys `ABORT_CONTROLLER` and `ABORT_SIGNAL`
+   (plus the deprecated `req.abortController` / `req.abortSignal` properties);
+3. listens to the response:
+   - `finish`: the response was fully sent. The request is marked finished and the signal will **never** abort.
+   - `close` before `finish`: the connection went away early. The signal aborts with
+     `new AbortError('Client disconnected', 'client-disconnected')`.
+4. starts a timer if `timeout > 0`. When it fires, the signal aborts with
+   `new AbortError('Request timed out after <timeout>ms', 'timeout')`. The timer is cleared on `finish` and `close`.
+
+`@NestAbortSignal()` then reads `req[ABORT_SIGNAL]` (on Fastify, `req.raw[ABORT_SIGNAL]`) and hands it to your handler.
+
+```text
+request ──► middleware: new AbortController, start timer
+             │
+             ├─ handler runs, passes signal to fetch / db / loops
+             │
+             ├─ response finish ──► done, timer cleared, signal stays clean
+             ├─ connection close early ──► abort('client-disconnected')
+             └─ timer fires ──► abort('timeout')
+```
+
+## Why the response, not the request
+
+Earlier versions listened to the *request* stream. A request with a body (POST, PUT, PATCH) emits `close` as soon as
+the body has been read, so those signals aborted while the client was still waiting. Since 1.3 the middleware watches
+the *response*, which only closes early when the client really leaves. The end-to-end tests cover POST requests on
+both Express and Fastify.
+
+## What aborting does and does not do
+
+Aborting sets `signal.aborted`, fills `signal.reason` and fires the `abort` event. Everything that listens stops:
+`fetch` rejects, Node APIs reject, `throwIfAborted()` throws. Nothing else happens. The response is not ended and
+the handler is not interrupted between two `await`s that ignore the signal. Pass the signal down; see
+[Services and external calls](/guides/services/).
+
+## Routes
+
+`forRoot()` applies the middleware to `'*'`. `forRoutes()` takes a path or a list of paths in NestJS 11 syntax
+(`'/api/*path'`). Routes outside that list get no signal: `@NestAbortSignal()` returns `undefined` there.
+See [Configuration](/concepts/configuration/).

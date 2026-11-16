@@ -1,0 +1,169 @@
+---
+/** Small static diagrams for the landing bento cards. Outcome colours only, no decoration. */
+interface Props {
+  kind: 'real' | 'reset' | 'linked' | 'register' | 'dispose' | 'errors';
+}
+const { kind } = Astro.props;
+---
+
+<svg class="io-ill" viewBox="0 0 440 150" role="img" aria-hidden="true">
+  {kind === 'real' && (
+    <g>
+      <rect x="20" y="52" width="150" height="44" rx="10" class="box" />
+      <text x="95" y="79" text-anchor="middle" class="mono">controller.signal</text>
+      {[['fetch', 22], ['fs/promises', 62], ['stream.pipeline', 102], ['AbortSignal.any', 142]].map(([label, y]) => (
+        <g>
+          <path d={`M170 74 C210 74, 220 ${Number(y) - 4}, 260 ${Number(y) - 4}`} class="wire ok-stroke" />
+          <text x="268" y={y} class="mono">{label}</text>
+        </g>
+      ))}
+      <text x="95" y="120" text-anchor="middle" class="tiny faint">instanceof AbortSignal</text>
+    </g>
+  )}
+  {kind === 'reset' && (
+    <g>
+      <path d="M20 90 H420" class="wire" />
+      <path d="M20 90 H250" class="wire ok-stroke" stroke-width="3" />
+      <path d="M150 50 V110" class="wire faint-stroke" />
+      <text x="154" y="44" class="tiny faint">old deadline</text>
+      <path d="M330 50 V110" class="wire to-stroke" stroke-dasharray="5 4" stroke-width="2" />
+      <text x="334" y="44" class="tiny to">abortAfter() again</text>
+      <circle cx="120" cy="90" r="5" class="ok-fill" />
+      <text x="70" y="128" class="tiny">reset at 120</text>
+      <text x="250" y="128" class="tiny faint">Infinity cancels it</text>
+    </g>
+  )}
+  {kind === 'linked' && (
+    <g>
+      <rect x="20" y="55" width="120" height="40" rx="10" class="box" />
+      <text x="80" y="80" text-anchor="middle" class="mono">request</text>
+      {[30, 75, 120].map((y, i) => (
+        <g>
+          <path d={`M140 75 C190 75, 200 ${y}, 250 ${y}`} class={`wire ${i === 1 ? 'to-stroke' : 'cb-stroke'}`} />
+          <rect x="250" y={y - 15} width="130" height="30" rx="8" class="box" />
+          <text x="262" y={y + 4} class="mono">{['load user', 'query (2 s)', 'render'][i]}</text>
+        </g>
+      ))}
+      <text x="392" y="79" class="tiny to">timeout</text>
+      <text x="20" y="130" class="tiny faint">parent reason flows down; listeners go away</text>
+    </g>
+  )}
+  {kind === 'register' && (
+    <g>
+      <path d="M20 75 H230" class="wire" />
+      <circle cx="230" cy="75" r="7" class="ca" />
+      <text x="20" y="64" class="tiny faint">signal</text>
+      <text x="214" y="56" class="tiny">abort(reason)</text>
+      <path d="M237 75 C280 75, 280 40, 320 40" class="wire cb-stroke" />
+      <path d="M237 75 C280 75, 280 110, 320 110" class="wire cb-stroke" />
+      <text x="326" y="44" class="mono">cb(reason)</text>
+      <text x="326" y="114" class="mono">whenAborted</text>
+      <text x="20" y="130" class="tiny faint">unregister() / using: removed</text>
+    </g>
+  )}
+  {kind === 'dispose' && (
+    <g>
+      <rect x="40" y="40" width="160" height="70" rx="12" class="frame" />
+      <text x="120" y="70" text-anchor="middle" class="mono">using controller</text>
+      <text x="120" y="92" text-anchor="middle" class="tiny faint">timer · parent links</text>
+      <path d="M200 75 H260" class="wire" marker-end="" />
+      <text x="270" y="68" class="mono">dispose()</text>
+      <text x="270" y="90" class="tiny">released, not aborted</text>
+    </g>
+  )}
+  {kind === 'errors' && (
+    <g>
+      <rect x="20" y="30" width="190" height="40" rx="10" class="box to-stroke" />
+      <text x="115" y="55" text-anchor="middle" class="mono to">TimeoutError</text>
+      <rect x="230" y="30" width="190" height="40" rx="10" class="box ca-stroke" />
+      <text x="325" y="55" text-anchor="middle" class="mono ca">AbortError / yours</text>
+      <path d="M115 70 V95 H325 V70" class="wire" />
+      <text x="220" y="122" text-anchor="middle" class="mono">isAbortError(e)</text>
+    </g>
+  )}
+</svg>
+
+<style>
+  .io-ill {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .box {
+    fill: var(--io-surface-2);
+    stroke: var(--io-hairline-strong);
+  }
+  .frame {
+    fill: none;
+    stroke: var(--io-hairline-strong);
+    stroke-dasharray: 4 4;
+  }
+  .dashed {
+    stroke-dasharray: 4 3;
+    fill: none;
+  }
+  .mono {
+    font-family: var(--io-mono);
+    font-size: 12px;
+    fill: var(--sl-color-white);
+  }
+  .tiny {
+    font-family: var(--io-mono);
+    font-size: 10.5px;
+    fill: var(--io-text-muted);
+  }
+  .faint {
+    fill: var(--io-text-faint);
+  }
+  .ok {
+    fill: var(--io-accent);
+  }
+  .wire {
+    fill: none;
+    stroke: var(--io-hairline-strong);
+    stroke-width: 1.5;
+  }
+  .ok-stroke {
+    stroke: var(--io-accent);
+  }
+  .ok-fill {
+    fill: var(--io-accent);
+  }
+  .to-stroke {
+    stroke: var(--io-timeout);
+  }
+  .ca-stroke {
+    stroke: var(--io-cancel);
+  }
+  .cb-stroke {
+    stroke: var(--io-callback);
+  }
+  .to { fill: var(--io-timeout); }
+  .ca { fill: var(--io-cancel); }
+  .cb { fill: var(--io-callback); }
+  .faint-stroke {
+    stroke: var(--io-text-faint);
+    stroke-dasharray: 3 3;
+  }
+  .cyc {
+    stroke: var(--io-accent);
+    stroke-dasharray: 6 4;
+    stroke-width: 2;
+  }
+  .cyc-fill {
+    fill: var(--io-accent);
+  }
+  .warn {
+    stroke: var(--io-amber);
+    stroke-width: 2;
+  }
+  .warn-fill {
+    fill: var(--io-amber);
+  }
+  .warn-text {
+    fill: var(--io-amber);
+  }
+  :global([data-theme='light']) .warn-text {
+    fill: #b45309;
+  }
+</style>

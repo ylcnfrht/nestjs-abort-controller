@@ -1,0 +1,46 @@
+---
+title: Installation
+description: Install nestjs-abort-controller and check the NestJS, Node and adapter requirements.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs syncKey="pm">
+  <TabItem label="npm">
+
+```sh
+npm install nestjs-abort-controller
+```
+
+</TabItem>
+  <TabItem label="pnpm">
+
+```sh
+pnpm add nestjs-abort-controller
+```
+
+</TabItem>
+  <TabItem label="yarn">
+
+```sh
+yarn add nestjs-abort-controller
+```
+
+</TabItem>
+</Tabs>
+
+## Requirements
+
+| | |
+| --- | --- |
+| NestJS | 11 (`@nestjs/common`, `@nestjs/core` are peer dependencies) |
+| Adapter | `@nestjs/platform-express` or `@nestjs/platform-fastify` |
+| Node.js | whatever your NestJS version needs (Nest 11: Node 20+) |
+| Other peers | `reflect-metadata`, `rxjs` (already in every Nest app) |
+
+There are no runtime dependencies. The package ships CommonJS with type definitions, which works from both
+CommonJS and ESM Nest projects.
+
+Next: [Quick start](/start/quick-start/).

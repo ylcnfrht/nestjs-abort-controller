@@ -1,0 +1,39 @@
+---
+title: With enhanced-abort-controller
+description: Per-step deadlines linked to the request signal, with listeners that clean up, using @ylcnfrht/enhanced-abort-controller.
+sidebar:
+  order: 4
+---
+
+The request signal is the outer bound. Inside a request you often want a tighter limit for one step: 2 seconds for a
+cache, 5 for a partner API. `AbortSignal.any([signal, AbortSignal.timeout(2000)])` works, but it keeps a listener on
+the request signal until the request ends.
+
+[`@ylcnfrht/enhanced-abort-controller`](https://enhanced-abort-controller.ferhatyalcin.dev) (same author) adds linked
+controllers that remove their listeners when they are disposed, and deadlines you can move:
+
+```sh
+npm install @ylcnfrht/enhanced-abort-controller
+```
+
+```ts
+import { EnhancedAbortController } from '@ylcnfrht/enhanced-abort-controller';
+
+@Get(':id')
+async find(@Param('id') id: string, @NestAbortSignal() signal: AbortSignal) {
+  {
+    // aborts with the request, or after 2 s, whichever comes first
+    using step = EnhancedAbortController.createLinkedController(signal).abortAfter(2_000);
+    const cached = await this.cache.get(id, step.signal).catch(() => undefined);
+    if (cached) return cached;
+  } // leaving the block releases the timer and the listener on the request signal
+
+  return this.api.fetchUser(id, signal);
+}
+```
+
+`using` needs TypeScript 5.2+ with `"lib": ["esnext"]` (or `"esnext.disposable"`); without it, call `step.dispose()`
+in a `finally`.
+
+Read more: [linked controllers](https://enhanced-abort-controller.ferhatyalcin.dev/concepts/linked-controllers/),
+[per-step deadlines](https://enhanced-abort-controller.ferhatyalcin.dev/guides/per-step-deadlines/).

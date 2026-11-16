@@ -1,0 +1,46 @@
+---
+title: Introduction
+description: What nestjs-abort-controller does, when you need it and what it deliberately leaves out.
+sidebar:
+  order: 1
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+`nestjs-abort-controller` gives every NestJS HTTP request its own [`AbortSignal`](https://developer.mozilla.org/docs/Web/API/AbortSignal).
+The signal aborts in two cases:
+
+- the **client disconnects** before the response is sent (closed tab, cancelled `fetch`, load balancer gave up), or
+- the request runs past its **timeout** (30 seconds unless you change it).
+
+You inject the signal with `@NestAbortSignal()` and pass it to whatever does the slow work: `fetch`, `HttpService`,
+database drivers, `fs/promises`, your own loops. When nobody is waiting for the answer any more, that work stops.
+
+```ts
+@Get('report')
+async report(@NestAbortSignal() signal: AbortSignal) {
+  const rows = await this.db.query(sql, { signal }); // stops if the client leaves
+  return this.render(rows, signal);
+}
+```
+
+## Why bother
+
+Node keeps running a handler after its client is gone. A slow report that the user gave up on still runs every query,
+holds a database connection and burns CPU. Under load, retries from impatient clients pile up on top of the work
+they abandoned. Cancelling that work is the cheapest capacity you can get.
+
+## What it is (and is not)
+
+- **One middleware** registered by `AbortControllerModule`, for all routes or the ones you pick.
+- **One decorator**, `@NestAbortSignal()`, that hands the signal to a handler.
+- **One error type**, `AbortError`, whose `reason` says `'timeout'` or `'client-disconnected'`, and `throwIfAborted()` to check the signal in loops.
+- **An optional exception filter** that turns timeouts into `408 Request Timeout`.
+
+It does **not** cancel anything by itself. An `AbortSignal` is a flag plus an event; code has to listen to it.
+If a library you call takes no signal, it keeps running. The timeout aborts the signal, it does not close the response.
+
+<CardGrid>
+  <LinkCard title="Quick start" href="/start/quick-start/" description="Module, decorator, first cancelled request." />
+  <LinkCard title="How it works" href="/concepts/how-it-works/" description="What the middleware does on every request." />
+</CardGrid>

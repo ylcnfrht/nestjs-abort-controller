@@ -1,0 +1,33 @@
+---
+title: Cheat sheet
+description: The whole nestjs-abort-controller API on one page.
+sidebar:
+  order: 1
+---
+
+```ts
+import {
+  AbortControllerModule, AbortControllerMiddleware, AbortExceptionFilter,
+  NestAbortSignal, throwIfAborted, AbortError,
+  ABORT_SIGNAL, ABORT_CONTROLLER,
+} from 'nestjs-abort-controller';
+```
+
+| Need | Write |
+| --- | --- |
+| Signal on every route | `AbortControllerModule.forRoot()` |
+| Only some routes | `AbortControllerModule.forRoutes(['/api/*path'], options)` |
+| Change the timeout | `{ timeout: 10_000 }` (ms, default `30000`) |
+| No timeout | `{ timeout: 0 }` |
+| Logs | `{ enableLogging: true }` (debug + warn) |
+| Get the signal in a handler | `@NestAbortSignal() signal: AbortSignal` |
+| Cancel a call | `fetch(url, { signal })` |
+| Checkpoint in a loop | `throwIfAborted(signal)` |
+| Why it aborted | `error.reason` / `signal.reason.reason`: `'timeout'` or `'client-disconnected'` |
+| Is it an abort | `error instanceof AbortError` |
+| 408 instead of 500 | `{ provide: APP_FILTER, useClass: AbortExceptionFilter }` |
+| Signal in a guard or interceptor | `req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL]` |
+| Abort it yourself | `req[ABORT_CONTROLLER].abort(new AbortError('...'))` |
+| Manual middleware | `new AbortControllerMiddleware({ timeout })` |
+
+Full signatures: [API reference](/api/overview/).

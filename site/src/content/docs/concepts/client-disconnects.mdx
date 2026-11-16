@@ -1,0 +1,38 @@
+---
+title: Client disconnects
+description: When the signal aborts because the client left, and when it deliberately does not.
+sidebar:
+  order: 3
+---
+
+The signal aborts with reason `'client-disconnected'` when the response emits `close` **before** `finish`. In practice:
+
+- the browser tab was closed or navigated away;
+- the frontend cancelled its `fetch` (for example a search box that fires on every key);
+- `curl` was interrupted;
+- a proxy or load balancer gave up on its upstream timeout and closed the connection.
+
+It does **not** abort when:
+
+- the response was sent completely (`finish` fired first), even though `close` follows right after;
+- a POST/PUT/PATCH body was read (fixed in 1.3);
+- the signal was already aborted by the timeout.
+
+## What to do with it
+
+Usually nothing beyond passing the signal on. The work stops, there is nobody to send an answer to, and
+[`AbortExceptionFilter`](/concepts/error-responses/) makes sure the resulting `AbortError` is not logged as a 500.
+
+If you need to know, read the reason:
+
+```ts
+signal.addEventListener('abort', () => {
+  if (signal.reason?.reason === 'client-disconnected') metrics.increment('requests.abandoned');
+});
+```
+
+## Side effects that must finish
+
+Cancellation is the right default for reads. For writes, decide per call: a payment that reached the provider should
+not be abandoned halfway because the browser closed. Do not pass the request signal to work that must complete;
+give it its own timeout instead (`AbortSignal.timeout(10_000)`).

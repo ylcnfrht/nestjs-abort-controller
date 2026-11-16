@@ -1,0 +1,148 @@
+/* Shared look of the interactive demos (TimelineSimulator, LinkedSignals, Playground, HeroDemo). */
+.io-demo {
+  --d-border: var(--sl-color-gray-5);
+  --d-muted: var(--sl-color-gray-3);
+  --d-bg: color-mix(in srgb, var(--sl-color-gray-6) 55%, transparent);
+  --d-rejected: var(--sl-color-gray-3);
+  --d-fallback: #a78bfa;
+  --d-cache: #2dd4bf;
+  border: 1px solid var(--d-border);
+  border-radius: var(--io-radius, 14px);
+  background: var(--d-bg);
+  padding: 1rem 1.1rem;
+  margin-block: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--sl-color-gray-2);
+}
+:root[data-theme='light'] .io-demo {
+  /* Darker signal colours so text and thin marks keep AA contrast on white. */
+  --io-green: #047857;
+  --io-amber: #b45309;
+  --io-red: #dc2626;
+  --io-blue: #2563eb;
+  --d-fallback: #7c3aed;
+  --d-cache: #0d9488;
+}
+.io-demo * + * {
+  margin-top: 0; /* Starlight's markdown flow spacing doesn't belong inside widgets */
+}
+.io-demo h3,
+.io-demo h4 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--d-muted);
+  margin: 0 0 0.5rem;
+}
+.io-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem 1rem;
+  margin-bottom: 1rem;
+}
+.io-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--d-muted);
+}
+.io-field output,
+.io-field .io-val {
+  color: var(--sl-color-white);
+  font-family: var(--sl-font-mono);
+  font-size: 0.78rem;
+}
+.io-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--sl-color-accent);
+}
+.io-demo select,
+.io-demo input[type='number'] {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--sl-color-white);
+  background: var(--sl-color-black);
+  border: 1px solid var(--d-border);
+  border-radius: 6px;
+  padding: 0.25rem 0.4rem;
+}
+.io-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--sl-color-gray-2);
+  cursor: pointer;
+}
+.io-check input {
+  accent-color: var(--sl-color-accent);
+  width: 1rem;
+  height: 1rem;
+}
+.io-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--d-border);
+  background: var(--sl-color-black);
+  color: var(--sl-color-white);
+  cursor: pointer;
+}
+.io-btn:hover {
+  border-color: var(--sl-color-accent);
+}
+.io-btn[data-primary] {
+  background: var(--sl-color-accent);
+  border-color: var(--sl-color-accent);
+  color: var(--sl-color-black);
+}
+.io-demo :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+.io-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.io-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+}
+.io-stat {
+  border: 1px solid var(--d-border);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  background: var(--sl-color-black);
+}
+.io-stat b {
+  display: block;
+  font-family: var(--sl-font-mono);
+  font-size: 1.05rem;
+  color: var(--sl-color-white);
+}
+.io-stat span {
+  font-size: 0.72rem;
+  color: var(--d-muted);
+}
+.io-demo i {
+  margin: 0; /* page CSS gives inline <i> a bottom margin, which misaligns legend keys */
+}
+/* Higher specificity than the docs' table rule (display:block; width:max-content), which would unhide a table.io-sr. */
+.io-sr,
+.sl-markdown-content table.io-sr {
+  position: absolute;
+  width: 1px;
+  max-width: 1px;
+  padding: 0;
+  border: 0;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -48,7 +48,11 @@
   "bugs": {
     "url": "https://github.com/ylcnfrht/nestjs-abort-controller/issues"
   },
-  "homepage": "https://github.com/ylcnfrht/nestjs-abort-controller#readme",
+  "homepage": "https://nestjs-abort-controller.ferhatyalcin.dev",
+  "funding": {
+    "type": "individual",
+    "url": "https://buymeacoffee.com/ylcnfrht"
+  },
   "engines": {
     "node": ">=16.0.0"
   },

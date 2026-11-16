@@ -1,0 +1,80 @@
+---
+title: Quick start
+description: Register AbortControllerModule, inject the signal, and watch a request get cancelled.
+sidebar:
+  order: 3
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. **Import the module** in your root module. `forRoot()` applies the middleware to every route.
+
+   ```ts title="app.module.ts"
+   import { Module } from '@nestjs/common';
+   import { AbortControllerModule } from 'nestjs-abort-controller';
+
+   @Module({
+     imports: [AbortControllerModule.forRoot({ timeout: 30_000 })],
+   })
+   export class AppModule {}
+   ```
+
+2. **Inject the signal** with `@NestAbortSignal()` and pass it on.
+
+   ```ts title="users.controller.ts"
+   import { Controller, Get, Param } from '@nestjs/common';
+   import { NestAbortSignal } from 'nestjs-abort-controller';
+
+   @Controller('users')
+   export class UsersController {
+     @Get(':id')
+     async findOne(@Param('id') id: string, @NestAbortSignal() signal: AbortSignal) {
+       const res = await fetch(`https://api.example.com/users/${id}`, { signal });
+       return res.json();
+     }
+   }
+   ```
+
+3. **Check it in loops** with `throwIfAborted()`, for work that does not take a signal itself.
+
+   ```ts
+   import { throwIfAborted } from 'nestjs-abort-controller';
+
+   for (const item of items) {
+     throwIfAborted(signal);
+     await process(item);
+   }
+   ```
+
+4. **Optional: proper status codes.** Register `AbortExceptionFilter` so a timeout becomes `408` instead of `500`.
+
+   ```ts title="app.module.ts"
+   import { APP_FILTER } from '@nestjs/core';
+   import { AbortControllerModule, AbortExceptionFilter } from 'nestjs-abort-controller';
+
+   @Module({
+     imports: [AbortControllerModule.forRoot()],
+     providers: [{ provide: APP_FILTER, useClass: AbortExceptionFilter }],
+   })
+   export class AppModule {}
+   ```
+
+</Steps>
+
+## Try it
+
+Start the app, request a slow endpoint and press <kbd>Ctrl</kbd>+<kbd>C</kbd> before it answers:
+
+```sh
+curl localhost:3000/users/1
+```
+
+With `enableLogging: true` the middleware logs `Client disconnected, aborting request` and the `fetch` above rejects
+with the library's `AbortError`.
+
+<Aside type="caution" title="The default timeout is on">
+  Every request is aborted after 30 seconds unless you set `timeout`. Streaming, long polling or upload routes
+  usually need a larger value or `0`. See [Timeouts](/concepts/timeouts/).
+</Aside>

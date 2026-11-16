@@ -1,0 +1,59 @@
+---
+title: Timeouts
+description: The per-request timeout, its 30 second default, and how to set it per route group.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every request covered by the middleware gets a timer. When it fires, the signal aborts with
+`new AbortError('Request timed out after <timeout>ms', 'timeout')`. The timer is cleared as soon as the response
+finishes or the connection closes, so fast requests never see it.
+
+```ts
+AbortControllerModule.forRoot({ timeout: 10_000 }); // 10 s for everything
+AbortControllerModule.forRoot({ timeout: 0 });      // no timer, only disconnects
+```
+
+<Aside type="caution">
+  The default is **30000 ms**, not "off". Server-sent events, long polling, large uploads and file downloads that
+  run longer than that will have their signal aborted.
+</Aside>
+
+## Different limits for different routes
+
+Use `forRoutes()` once per group. Keep each group's paths disjoint: a request matched by two groups gets two
+middlewares, and the second one replaces the controller set by the first.
+
+```ts
+@Module({
+  imports: [
+    AbortControllerModule.forRoutes(['/api/*path'], { timeout: 10_000 }),
+    AbortControllerModule.forRoutes(['/reports/*path'], { timeout: 120_000 }),
+    AbortControllerModule.forRoutes(['/events/*path'], { timeout: 0 }), // SSE
+  ],
+})
+export class AppModule {}
+```
+
+## The timeout aborts the signal, nothing else
+
+When the timer fires, nothing is sent to the client by the middleware. The handler sees the abort through whatever
+listens to the signal, throws `AbortError`, and Nest's exception layer answers. Without a filter that is a `500`;
+with [`AbortExceptionFilter`](/concepts/error-responses/) it is `408 Request Timeout`.
+
+A handler that ignores the signal simply keeps running and answers late. That is why the signal has to reach the
+slow code.
+
+## Shorter deadlines inside a request
+
+The request timeout is the outer bound. For a single step that needs a tighter limit, combine signals:
+
+```ts
+const stepSignal = AbortSignal.any([signal, AbortSignal.timeout(2_000)]);
+await this.http.get(url, { signal: stepSignal });
+```
+
+For resettable or linked deadlines that clean up their listeners, see
+[With enhanced-abort-controller](/guides/enhanced-abort-controller/).

@@ -1,0 +1,79 @@
+---
+title: Services and external calls
+description: Pass the request signal from controllers to services, fetch, HttpService, databases and Node APIs.
+sidebar:
+  order: 1
+---
+
+The signal does nothing until something listens to it. The pattern is always the same: take it in the controller,
+pass it as the last argument to the service, and hand it to every call that accepts one.
+
+```ts
+@Controller('users')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Get()
+  list(@NestAbortSignal() signal: AbortSignal) {
+    return this.users.list(signal);
+  }
+}
+
+@Injectable()
+export class UsersService {
+  async list(signal: AbortSignal) {
+    const res = await fetch('https://api.example.com/users', { signal });
+    return res.json();
+  }
+}
+```
+
+Keep the parameter on the service, not in a request-scoped provider: it stays testable and does not turn your
+providers request-scoped.
+
+## Common clients
+
+| Client | How |
+| --- | --- |
+| `fetch` / undici | `fetch(url, { signal })` |
+| `@nestjs/axios` `HttpService` | `this.http.get(url, { signal })` |
+| `pg` | no signal support; use a statement timeout, or `throwIfAborted` between queries |
+| Prisma | no per-query signal; check `throwIfAborted` between steps |
+| MongoDB driver (6.x+) | `collection.find(query, { signal })` where supported by your driver version |
+| `fs/promises` | `readFile(path, { signal })` |
+| `timers/promises` | `setTimeout(ms, value, { signal })` |
+| `child_process` | `spawn(cmd, args, { signal })` |
+| `stream.pipeline` | `pipeline(a, b, { signal })` |
+
+Check your driver's docs: support for `AbortSignal` varies by version.
+
+## Several calls, one signal
+
+The same signal can go to any number of calls. The first abort stops all of them.
+
+```ts
+const [profile, orders] = await Promise.all([
+  this.profiles.get(id, signal),
+  this.orders.list(id, signal),
+]);
+```
+
+## Code that takes no signal
+
+Put `throwIfAborted(signal)` between units of work. It is a property read when nothing happened, so it is cheap.
+
+```ts
+for (const row of rows) {
+  throwIfAborted(signal);
+  await this.repo.upsert(row); // ignores the signal, but we stop before the next one
+}
+```
+
+## Work that must not be cancelled
+
+Do not pass the request signal to writes that must complete once started (charging a card, sending an email).
+Give them their own limit instead:
+
+```ts
+await this.payments.capture(id, { signal: AbortSignal.timeout(10_000) });
+```

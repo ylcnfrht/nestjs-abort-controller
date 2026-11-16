@@ -1,0 +1,59 @@
+---
+title: AbortError and throwIfAborted
+description: The error the signal aborts with, its reason field, and checking the signal in your own code.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## `AbortError`
+
+```ts
+type AbortReason = 'timeout' | 'client-disconnected';
+
+class AbortError extends Error {
+  name: 'AbortError';
+  readonly reason?: AbortReason;
+  constructor(message = 'Operation was aborted', reason?: AbortReason);
+}
+```
+
+The middleware aborts the signal **with** an `AbortError` as `signal.reason`. `fetch` rejects with the signal's reason
+as is, and so do `signal.throwIfAborted()` and `throwIfAborted()` below, so `error instanceof AbortError` and
+`error.reason` work on what they throw.
+
+```ts
+try {
+  return await fetch(url, { signal }).then((r) => r.json());
+} catch (error) {
+  if (error instanceof AbortError) {
+    this.logger.log(`stopped: ${error.reason}`); // 'timeout' | 'client-disconnected'
+  }
+  throw error;
+}
+```
+
+<Aside>
+  Node core APIs (`fs/promises`, `timers/promises`, `events.once`, `stream.pipeline`) reject with Node's *own*
+  `AbortError` and put the reason in `error.cause`. Other libraries have their own errors too (axios: `CanceledError`).
+  When you need the cause regardless of where the error came from, read `signal.reason`.
+</Aside>
+
+## `throwIfAborted(signal, message?)`
+
+A checkpoint for code that does not take a signal: loops, CPU work, sequences of calls.
+
+```ts
+for (const file of files) {
+  throwIfAborted(signal);
+  await this.convert(file);
+}
+```
+
+- Not aborted: returns.
+- Aborted by the middleware, no `message`: rethrows the middleware's `AbortError` itself (same object, same `reason`).
+- Aborted, with a `message`: throws a new `AbortError(message, reason)` that keeps the reason.
+- Aborted with some other reason (you called `controller.abort(x)` yourself): throws `new AbortError(message)` without a reason.
+
+The native `signal.throwIfAborted()` works too; it throws `signal.reason` as is.

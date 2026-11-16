@@ -1,0 +1,58 @@
+---
+title: Error responses
+description: AbortExceptionFilter maps timeouts to 408 and stays silent for clients that left.
+sidebar:
+  order: 6
+---
+
+Without help, an `AbortError` that escapes a handler is an unknown exception to Nest: it logs it and answers `500`.
+`AbortExceptionFilter` handles it instead:
+
+| Cause | Response |
+| --- | --- |
+| `reason: 'timeout'` | `408 Request Timeout` with `{ statusCode: 408, message, error: 'Request Timeout' }` |
+| `reason` undefined (your own `AbortError`, `throwIfAborted` after a manual abort) | `408 Request Timeout` |
+| `reason: 'client-disconnected'` | nothing: no body, no error log. Nobody is listening. |
+| headers already sent | nothing |
+| non-HTTP context (microservices, WebSockets) | rethrown unchanged |
+
+## Register it globally
+
+```ts
+import { APP_FILTER } from '@nestjs/core';
+import { AbortControllerModule, AbortExceptionFilter } from 'nestjs-abort-controller';
+
+@Module({
+  imports: [AbortControllerModule.forRoot()],
+  providers: [{ provide: APP_FILTER, useClass: AbortExceptionFilter }],
+})
+export class AppModule {}
+```
+
+It works with both Express and Fastify because it answers through Nest's `HttpAdapterHost`.
+
+## Or per controller
+
+```ts
+@UseFilters(AbortExceptionFilter)
+@Controller('reports')
+export class ReportsController {}
+```
+
+`@UseFilters(AbortExceptionFilter)` with the class (not an instance) lets Nest inject `HttpAdapterHost`.
+
+## Want 503 or 504 instead?
+
+408 says "the server gave up waiting for this request", which matches a request-level timeout. If your API
+convention is 504, write a tiny filter of your own:
+
+```ts
+@Catch(AbortError)
+export class GatewayTimeoutFilter implements ExceptionFilter {
+  catch(error: AbortError, host: ArgumentsHost) {
+    const res = host.switchToHttp().getResponse();
+    if (error.reason === 'client-disconnected' || res.headersSent) return;
+    res.status(504).json({ statusCode: 504, message: error.message }); // Express
+  }
+}
+```

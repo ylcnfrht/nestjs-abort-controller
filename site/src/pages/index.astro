@@ -1,0 +1,684 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { Code, Tabs, TabItem } from '@astrojs/starlight/components';
+import SignalField from '../components/landing/SignalField.astro';
+import Illustration from '../components/landing/Illustration.astro';
+import HeroDemo, { HERO_CODE } from '../components/HeroDemo.tsx';
+
+const description = 'Request cancellation for NestJS: an AbortSignal per request that aborts when the client disconnects or a timeout fires. Express and Fastify.';
+
+const bento = [
+  {
+    kind: 'real',
+    tag: 'Per request',
+    title: 'Every request gets its own AbortSignal.',
+    body: 'One middleware, registered by AbortControllerModule. The signal is a native AbortSignal: hand it to fetch, database drivers, fs/promises, timers/promises and anything else that takes one.',
+    href: '/concepts/how-it-works/',
+    wide: true,
+    code: `@Get(':id')
+find(@Param('id') id: string, @NestAbortSignal() signal: AbortSignal) {
+  return fetch(\`\${API}/users/\${id}\`, { signal });
+}`,
+  },
+  {
+    kind: 'register',
+    tag: 'Disconnects',
+    title: 'The client left. Stop working.',
+    body: 'When the connection closes before the response is sent, the signal aborts. Finished responses and POST bodies never trigger it.',
+    href: '/concepts/client-disconnects/',
+    code: `// abort reason
+new AbortError('Client disconnected', 'client-disconnected')`,
+  },
+  {
+    kind: 'reset',
+    tag: 'Timeout',
+    title: 'A deadline for every request.',
+    body: '30 seconds by default, per module or per route group. 0 turns it off. The timer is cleared when the response ends.',
+    href: '/concepts/timeouts/',
+    code: `AbortControllerModule.forRoutes(['/reports/*path'], {
+  timeout: 120_000,
+})`,
+  },
+  {
+    kind: 'errors',
+    tag: 'Errors',
+    title: 'Know why it stopped.',
+    body: "AbortError.reason is 'timeout' or 'client-disconnected'. throwIfAborted() rethrows the middleware's own error, so the reason survives.",
+    href: '/concepts/abort-errors/',
+    code: `catch (error) {
+  if (error instanceof AbortError) log(error.reason);
+}`,
+  },
+  {
+    kind: 'dispose',
+    tag: 'Responses',
+    title: '408 for timeouts, silence for the gone.',
+    body: 'The optional AbortExceptionFilter answers timeouts with 408 Request Timeout and sends nothing to a client that already left.',
+    href: '/concepts/error-responses/',
+    code: `providers: [
+  { provide: APP_FILTER, useClass: AbortExceptionFilter },
+]`,
+  },
+  {
+    kind: 'linked',
+    tag: 'Anywhere',
+    wide: true,
+    title: 'Guards, interceptors and Fastify too.',
+    body: 'The controller and signal live on the Node request under symbol keys. Read them anywhere you have the request. Fastify works the same: the decorator looks in req.raw for you.',
+    href: '/concepts/outside-controllers/',
+    code: `const req = context.switchToHttp().getRequest();
+const signal: AbortSignal = req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL];`,
+  },
+] as const;
+
+const toolbox = [
+  {
+    title: 'Module',
+    items: [
+      ['forRoot(options?)', 'All routes'],
+      ['forRoutes(routes, options?)', 'Some routes'],
+      ['timeout', 'ms, default 30000, 0 = off'],
+      ['enableLogging', 'Debug / warn logs'],
+    ],
+  },
+  {
+    title: 'Handlers',
+    items: [
+      ['@NestAbortSignal()', 'Inject the signal'],
+      ['throwIfAborted(signal)', 'Checkpoint in loops'],
+      ['signal.aborted · reason', 'Native AbortSignal'],
+    ],
+  },
+  {
+    title: 'Errors',
+    items: [
+      ['AbortError', 'name, message, reason'],
+      ["'timeout'", 'Deadline hit'],
+      ["'client-disconnected'", 'Connection closed early'],
+      ['AbortExceptionFilter', '408 / no response'],
+    ],
+  },
+  {
+    title: 'Low level',
+    items: [
+      ['ABORT_SIGNAL', 'Symbol key on the request'],
+      ['ABORT_CONTROLLER', 'Abort it yourself'],
+      ['AbortControllerMiddleware', 'Apply it manually'],
+    ],
+  },
+];
+
+const inCode = {
+  services: `@Injectable()
+export class SearchService {
+  constructor(private readonly http: HttpService) {}
+
+  async search(query: string, signal: AbortSignal) {
+    const [a, b] = await Promise.all([
+      fetch(\`\${A}?q=\${query}\`, { signal }).then((r) => r.json()),
+      firstValueFrom(this.http.get(B, { params: { q: query }, signal })),
+    ]);
+    return merge(a, b.data);
+  }
+}`,
+  loops: `@Post('import')
+async import(@Body() rows: Row[], @NestAbortSignal() signal: AbortSignal) {
+  let done = 0;
+  for (const row of rows) {
+    throwIfAborted(signal); // cheap check between units of work
+    await this.repo.upsert(row);
+    done++;
+  }
+  return { done };
+}`,
+  fastify: `const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter(),
+);
+// Nothing else changes: same module, same decorator.`,
+  interceptor: `@Injectable()
+export class SlowLogInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler) {
+    const req = context.switchToHttp().getRequest();
+    const signal: AbortSignal | undefined = req[ABORT_SIGNAL] ?? req.raw?.[ABORT_SIGNAL];
+    signal?.addEventListener('abort', () => logger.warn(\`\${req.url}: \${signal.reason.reason}\`));
+    return next.handle();
+  }
+}`,
+};
+---
+
+<StarlightPage frontmatter={{ title: 'nestjs-abort-controller', description, template: 'splash', pagefind: false }}>
+  <div class="io-landing not-content">
+    <section class="hero">
+      <SignalField />
+      <div class="hero-inner">
+        <a class="badge" href="/reference/changelog/"><span class="dot"></span>1.3 · Express + Fastify · ~3M downloads a year</a>
+        <h1>Stop work<br /><span>nobody is waiting for.</span></h1>
+        <p class="lede">
+          Every NestJS request gets an AbortSignal. It aborts when the client disconnects or the request runs past its timeout,
+          so database queries, fetch calls and loops stop instead of finishing for nobody.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="/start/quick-start/">Get started</a>
+          <a class="btn ghost" href="/concepts/how-it-works/">How it works</a>
+        </div>
+        <button class="install" type="button" data-copy="npm i nestjs-abort-controller">
+          <span class="prompt">$</span> npm i nestjs-abort-controller <span class="copy">copy</span>
+        </button>
+      </div>
+      <div class="hero-code">
+        <Code code={HERO_CODE} lang="ts" title="app.module.ts · report.controller.ts" />
+        <HeroDemo client:visible />
+      </div>
+    </section>
+
+    <section class="stats" aria-label="At a glance">
+      <div><strong>0</strong><span>runtime dependencies</span></div>
+      <div><strong>AbortSignal</strong><span>native, per request</span></div>
+      <div><strong>30 s</strong><span>default timeout</span></div>
+      <div><strong>NestJS 11</strong><span>Express + Fastify</span></div>
+      <div><strong>~136k</strong><span>weekly downloads</span></div>
+    </section>
+
+    <section class="section">
+      <p class="io-eyebrow">What it adds</p>
+      <h2>One module. Cancellation everywhere.</h2>
+      <div class="bento">
+        {bento.map((b) => (
+          <article class:list={['card', { wide: 'wide' in b && b.wide }]}>
+            {'wide' in b && b.wide && <div class="art"><Illustration kind={b.kind} /></div>}
+            <div class="card-body">
+              <span class="tag">{b.tag}</span>
+              <h3>{b.title}</h3>
+              <p>{b.body}</p>
+              <a class="more" href={b.href}>Read more <span aria-hidden="true">→</span></a>
+            </div>
+            <div class="card-code"><Code code={b.code} lang="ts" /></div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="section">
+      <p class="io-eyebrow">The toolbox</p>
+      <h2>Small on purpose. The whole API fits here.</h2>
+      <div class="toolbox">
+        {toolbox.map((group) => (
+          <div>
+            <h3>{group.title}</h3>
+            <ul>
+              {group.items.map(([api, desc]) => (
+                <li><code>{api}</code><span>{desc}</span></li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="section">
+      <p class="io-eyebrow">In code</p>
+      <h2>Pass the signal down. That is the whole trick.</h2>
+      <div class="incode">
+        <Tabs>
+          <TabItem label="Services"><Code code={inCode.services} lang="ts" /></TabItem>
+          <TabItem label="Long loops"><Code code={inCode.loops} lang="ts" /></TabItem>
+          <TabItem label="Fastify"><Code code={inCode.fastify} lang="ts" /></TabItem>
+          <TabItem label="Interceptor"><Code code={inCode.interceptor} lang="ts" /></TabItem>
+        </Tabs>
+      </div>
+    </section>
+
+    <section class="cta">
+      <SignalField intensity="quiet" />
+      <div class="cta-inner">
+        <p class="io-eyebrow">Get started</p>
+        <h2>Import the module. Inject the signal.</h2>
+        <p class="lede">Two lines to start. Then pass the signal to whatever does the slow work.</p>
+        <div class="actions">
+          <a class="btn primary" href="/start/quick-start/">Read the quick start</a>
+          <a class="btn ghost" href="/migration/1-2-to-1-3/">Upgrading from 1.2?</a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>nestjs-abort-controller · MIT licensed</span>
+      <nav aria-label="Footer">
+        <a href="/start/introduction/">Docs</a>
+        <a href="/reference/changelog/">Changelog</a>
+        <a href="https://github.com/ylcnfrht/nestjs-abort-controller">GitHub</a>
+        <a href="https://www.npmjs.com/package/nestjs-abort-controller">npm</a>
+      </nav>
+    </footer>
+  </div>
+</StarlightPage>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+    button.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(button.dataset.copy!);
+      const label = button.querySelector('.copy');
+      if (!label) return;
+      label.textContent = 'copied';
+      setTimeout(() => (label.textContent = 'copy'), 1400);
+    });
+  }
+</script>
+
+<style>
+  /* The splash template still renders the page title and constrains width: hide one, break out of the other. */
+  :global(main:has(.io-landing) .content-panel:first-of-type) {
+    display: none;
+  }
+  :global(main:has(.io-landing) .content-panel) {
+    padding: 0;
+  }
+  :global(main:has(.io-landing) .sl-container) {
+    max-width: none;
+  }
+  .io-landing {
+    --max: 72rem;
+    color: var(--io-text);
+  }
+  .section,
+  .stats,
+  .foot {
+    max-width: var(--max);
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 6.5rem 1.5rem 0;
+    border-bottom: 1px solid var(--io-hairline);
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--io-accent) 7%, transparent), transparent);
+  }
+  .hero-inner {
+    position: relative;
+    max-width: 46rem;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.3rem 0.8rem 0.3rem 0.55rem;
+    border: 1px solid var(--io-hairline-strong);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--io-surface) 80%, transparent);
+    backdrop-filter: blur(8px);
+    font-family: var(--io-mono);
+    font-size: 0.72rem;
+    color: var(--io-text-muted);
+    text-decoration: none;
+  }
+  .badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--io-accent);
+    box-shadow: 0 0 10px var(--io-accent);
+  }
+  .hero h1 {
+    margin: 1.6rem 0 0;
+    font-size: clamp(2.5rem, 1.6rem + 4vw, 4.6rem);
+    line-height: 1.02;
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    color: var(--sl-color-white);
+  }
+  .hero h1 span {
+    color: color-mix(in oklab, var(--sl-color-white) 55%, var(--io-text-faint));
+  }
+  .lede {
+    margin: 1.4rem auto 0;
+    max-width: 36rem;
+    font-size: 1.08rem;
+    line-height: 1.6;
+    color: var(--io-text-muted);
+  }
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    height: 2.6rem;
+    padding: 0 1.15rem;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-weight: 550;
+    text-decoration: none;
+    transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  }
+  .btn.primary {
+    background: var(--sl-color-white);
+    color: var(--io-bg);
+  }
+  .btn.primary:hover {
+    transform: translateY(-1px);
+  }
+  .btn.ghost {
+    border: 1px solid var(--io-hairline-strong);
+    color: var(--sl-color-white);
+    background: color-mix(in oklab, var(--io-surface) 70%, transparent);
+  }
+  .btn.ghost:hover {
+    border-color: color-mix(in oklab, var(--io-accent) 50%, transparent);
+  }
+  .install {
+    margin-top: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem 0.45rem 0.9rem;
+    border: 1px solid var(--io-hairline);
+    border-radius: 10px;
+    background: color-mix(in oklab, var(--io-surface) 85%, transparent);
+    font-family: var(--io-mono);
+    font-size: 0.82rem;
+    color: var(--io-text);
+    cursor: pointer;
+  }
+  .install .prompt {
+    color: var(--io-accent);
+  }
+  .install .copy {
+    font-size: 0.68rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 6px;
+    background: var(--io-surface-2);
+    color: var(--io-text-faint);
+  }
+  .hero-code {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    position: relative;
+    max-width: 66rem;
+    margin: 3.5rem auto -1px;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -30px 80px -20px color-mix(in oklab, var(--io-accent) 18%, transparent);
+  }
+  .hero-code :global(.expressive-code .frame) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    height: 100%;
+  }
+  .hero-code :global(.expressive-code) {
+    height: 100%;
+  }
+  .hero-code :global(.io-hero-out) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  /* Stats strip */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-inline: 1px solid var(--io-hairline);
+    padding: 0;
+  }
+  .stats div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 1.6rem 1.4rem;
+    border-inline-end: 1px solid var(--io-hairline);
+  }
+  .stats div:last-child {
+    border-inline-end: none;
+  }
+  .stats strong {
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+  }
+  .stats span {
+    font-family: var(--io-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    color: var(--io-text-faint);
+    text-transform: uppercase;
+  }
+
+  /* Sections */
+  .section {
+    padding-top: 6.5rem;
+  }
+  .section h2,
+  .cta h2 {
+    margin: 0.7rem 0 2.2rem;
+    font-size: clamp(1.7rem, 1.3rem + 1.4vw, 2.5rem);
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+    font-weight: 620;
+    color: var(--sl-color-white);
+    max-width: 34rem;
+  }
+
+  /* Bento */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--io-hairline);
+    border-radius: 18px;
+    background: linear-gradient(180deg, var(--io-surface), color-mix(in oklab, var(--io-surface) 60%, var(--io-bg)));
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover {
+    border-color: var(--io-hairline-strong);
+  }
+  .card.wide {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    grid-template-rows: auto 1fr;
+  }
+  .card.wide .art {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    align-items: center;
+    border-bottom: 0;
+    border-left: 1px solid var(--io-hairline);
+    padding: 2rem;
+  }
+  .card.wide .card-body {
+    grid-column: 1;
+    grid-row: 1;
+    padding-top: 2rem;
+  }
+  .card.wide .card-code {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .art {
+    padding: 1.4rem 1.4rem 0.4rem;
+    border-bottom: 1px solid var(--io-hairline);
+    background: radial-gradient(ellipse 70% 90% at 50% 100%, color-mix(in oklab, var(--io-accent) 5%, transparent), transparent);
+  }
+  .card-body {
+    padding: 1.4rem 1.5rem 0.4rem;
+  }
+  .tag {
+    font-family: var(--io-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--io-text-faint);
+    border: 1px solid var(--io-hairline);
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+  }
+  .card h3 {
+    margin: 0.9rem 0 0.5rem;
+    font-size: 1.12rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+  }
+  .card p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--io-text-muted);
+  }
+  .more {
+    display: inline-block;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    font-weight: 550;
+    color: var(--sl-color-white);
+    text-decoration: none;
+  }
+  .more:hover span {
+    color: var(--io-accent);
+  }
+  .card-code {
+    margin: 1rem 1.25rem 1.25rem;
+    margin-top: auto;
+    padding-top: 1rem;
+  }
+  .card-code :global(pre) {
+    font-size: 0.78rem !important;
+  }
+
+  /* Toolbox */
+  .toolbox {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--io-hairline);
+  }
+  .toolbox > div {
+    padding: 1.5rem 1.25rem 0 0;
+  }
+  .toolbox h3 {
+    margin: 0 0 1rem;
+    font-family: var(--io-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--io-text-faint);
+  }
+  .toolbox ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.95rem;
+  }
+  .toolbox code {
+    display: block;
+    font-family: var(--io-mono);
+    font-size: 0.82rem;
+    color: var(--sl-color-white);
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .toolbox span {
+    font-size: 0.82rem;
+    color: var(--io-text-faint);
+  }
+
+  /* In code */
+  .incode {
+    border: 1px solid var(--io-hairline);
+    border-radius: 16px;
+    padding: 0.5rem 1.25rem 1.25rem;
+    background: var(--io-surface);
+  }
+
+  /* CTA */
+  .cta {
+    position: relative;
+    overflow: hidden;
+    margin-top: 7rem;
+    padding: 7rem 1.5rem;
+    border-block: 1px solid var(--io-hairline);
+    text-align: center;
+  }
+  .cta-inner {
+    position: relative;
+  }
+  .cta h2 {
+    margin-inline: auto;
+  }
+
+  /* Footer */
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 2.5rem;
+    font-size: 0.82rem;
+    color: var(--io-text-faint);
+  }
+  .foot nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+  .foot a {
+    color: var(--io-text-faint);
+    text-decoration: none;
+  }
+  .foot a:hover {
+    color: var(--sl-color-white);
+  }
+
+  @media (max-width: 60rem) {
+    .hero-code {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .bento {
+      grid-template-columns: 1fr;
+    }
+    .card.wide {
+      display: flex;
+    }
+    .card.wide .art {
+      border-left: 0;
+      border-bottom: 1px solid var(--io-hairline);
+    }
+    .toolbox {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .stats div {
+      border-bottom: 1px solid var(--io-hairline);
+    }
+  }
+  @media (max-width: 34rem) {
+    .hero {
+      padding-top: 4rem;
+    }
+    .toolbox {
+      grid-template-columns: 1fr;
+    }
+    .foot {
+      flex-direction: column;
+    }
+  }
+</style>

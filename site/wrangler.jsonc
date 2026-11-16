@@ -1,0 +1,10 @@
+// Docs site on Cloudflare Workers static assets: `npm run build && npx wrangler deploy` (manual, nothing auto-deploys).
+{
+  "name": "nestjs-abort-controller-docs",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "nestjs-abort-controller.ferhatyalcin.dev", "custom_domain": true }]
+}

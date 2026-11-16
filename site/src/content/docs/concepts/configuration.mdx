@@ -1,0 +1,61 @@
+---
+title: Configuration
+description: forRoot, forRoutes and the two options, timeout and enableLogging.
+sidebar:
+  order: 2
+---
+
+## `forRoot(options?)`
+
+Applies the middleware to every route.
+
+```ts
+AbortControllerModule.forRoot({ timeout: 30_000, enableLogging: false });
+```
+
+## `forRoutes(routes, options?)`
+
+Applies it only to the given routes. Use NestJS 11 wildcard syntax: `'/api/*path'` (the old `'/api/*'` still works,
+with a deprecation warning from Nest).
+
+```ts
+AbortControllerModule.forRoutes(['/api/*path', '/reports/*path'], { timeout: 60_000 });
+```
+
+Requests outside these routes get no controller, so `@NestAbortSignal()` resolves to `undefined` there.
+Type the parameter as `AbortSignal | undefined` in handlers that can be reached both ways.
+
+Each `forRoot()` / `forRoutes()` call creates its own options provider; options do not leak between calls (they did
+before 1.3).
+
+## Options
+
+```ts
+interface AbortControllerOptions {
+  timeout?: number;        // ms, default 30000; 0 disables the timer
+  enableLogging?: boolean; // default false
+}
+```
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `timeout` | `30000` | Milliseconds until the signal aborts with reason `'timeout'`. `0` (or any value ≤ 0) turns it off. Cleared when the response finishes or closes. See [Timeouts](/concepts/timeouts/). |
+| `enableLogging` | `false` | Logs through Nest's `Logger` with context `AbortControllerMiddleware`: `debug` for *Client disconnected, aborting request* and *Request completed successfully*, `warn` for *Request timeout after Nms*. Enable the `debug` log level to see the first two. |
+
+## Applying the middleware yourself
+
+`AbortControllerMiddleware` is an ordinary Nest middleware. If you need your own `MiddlewareConsumer` setup, create
+it with options:
+
+```ts
+const abortMiddleware = new AbortControllerMiddleware({ timeout: 5_000 });
+
+@Module({})
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(abortMiddleware.use.bind(abortMiddleware)).forRoutes('*');
+  }
+}
+```
+
+`AbortControllerMiddleware.setOptions()` still exists for 1.2 code but is deprecated and will be removed in 2.0.
